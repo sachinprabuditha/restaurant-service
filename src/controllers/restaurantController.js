@@ -1,4 +1,6 @@
+// restaurantController.js (UPDATED)
 const Restaurant = require("../models/Restaurant");
+const Menu = require("../models/Menu");
 
 exports.createRestaurant = async (req, res) => {
     try {
@@ -17,17 +19,15 @@ exports.createRestaurant = async (req, res) => {
     }
 };
 
-
 exports.getRestaurants = async (req, res) => {
     try {
-        const restaurants = await Restaurant.find();
+        const restaurants = await Restaurant.find({ isDeleted: false });
         res.status(200).json(restaurants);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 };
 
-// ➤ Update Restaurant Availability (Open/Closed)
 exports.updateRestaurantAvailability = async (req, res) => {
     try {
         const { isOpen } = req.body;
@@ -55,8 +55,28 @@ exports.updateRestaurant = async (req, res) => {
 
 exports.deleteRestaurant = async (req, res) => {
     try {
-        await Restaurant.findByIdAndDelete(req.params.id);
-        res.status(200).json({ message: "Restaurant deleted successfully" });
+        const deletedRestaurant = await Restaurant.findByIdAndUpdate(req.params.id, { isDeleted: true }, { new: true });
+        res.status(200).json({ message: "Restaurant deleted (soft delete)", deletedRestaurant });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// ➤ System Stats (New Feature)
+exports.getSystemStats = async (req, res) => {
+    try {
+        const totalRestaurants = await Restaurant.countDocuments({ isDeleted: false });
+        const totalMenuItems = await Menu.countDocuments({ isDeleted: false });
+        const avgPrice = await Menu.aggregate([
+            { $match: { isDeleted: false } },
+            { $group: { _id: null, avgPrice: { $avg: "$price" } } }
+        ]);
+
+        res.json({
+            totalRestaurants,
+            totalMenuItems,
+            averageMenuPrice: avgPrice[0]?.avgPrice.toFixed(2) || 0
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
